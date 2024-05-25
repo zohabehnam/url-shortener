@@ -1,0 +1,43 @@
+services:
+  api:
+    build: ./src
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./src:/src
+    ports:
+      - 8000:8000
+    environment:
+      - DATABASE_URL=postgresql://dev:dev@db:5432/dev
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:15.3-bullseye
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER= ${DB_USER}
+      - POSTGRES_PASSWORD= ${DB_PASSWORD}
+      - POSTGRES_DB= ${DB_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d dev -U dev"]
+      interval: 10s
+      timeout: 30s
+      retries: 5
+      start_period: 10s
+  openapi-cli:
+    image: openapitools/openapi-generator-cli
+    volumes:
+      - ./src:/src
+    command: generate -i http://api:8000/openapi.json -g k6 -o /src/k6/ --skip-validate-spec
+  k6:
+    image: loadimpact/k6
+    volumes:
+      - ./src:/src
+    command: run /src/k6/script.js
+
+
+volumes:
+  postgres_data:
